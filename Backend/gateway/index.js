@@ -31,6 +31,8 @@ app.get("/", (req,res)=>{
 app.use("/api/auth", proxy(process.env.AUTH_URL))
 
 app.use("/api/resume",isAuth, proxyWithHeaders(process.env.RESUME_URL))
+
+app.use("/api/interview",isAuth, proxyWithHeaders(process.env.INTERVIEW_URL))
 app.get("/api/me" , isAuth, getCurrentUser)
 
 

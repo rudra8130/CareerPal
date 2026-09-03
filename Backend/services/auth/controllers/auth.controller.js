@@ -69,3 +69,69 @@ export const logout = async (req, res)=>{
       
     }
   }
+
+ export  const useCoins = async (req, res)=>{
+    try {
+      const sessionId = req.cookies?.session
+
+      if(!sessionId){
+        return res.status(401).json({message:"Unauthorized"})
+      }
+      const session = await redis.get(`session:${sessionId}`)
+      const sessionData = JSON.parse(session)
+
+      const {coins, action} = req.body
+
+      if(!coins){
+        return res.status(400).json({
+          success:false,
+          message:"Coins are Required"
+        })
+      }
+
+     const user = await User.findById(sessionData.userId)
+
+      if(!user){
+        return res.status(404).json({
+          success:false,
+          message:"User not Found"
+        })
+      }
+
+      if(user.interviewCoin < coins){
+        return res.status(403).json({
+          success:false,
+          message:"Not enough interview coins",
+          interviewCoin:user.interviewCoin,
+        })
+      }
+
+      user.interviewCoin -= coins
+
+      await user.save(  )
+
+
+      await redis.set(`session:${sessionId}`, JSON.stringify({
+      userId: user._id,
+      name: user.name,
+      email:user.email,
+      interviewCoin: user.interviewCoin
+    }), "EX", 7*24*60*60)
+
+
+
+    return res.status(200).json({
+      success:true,
+      message:"Interview coins Updated successfully",
+      action,
+      interviewCoin:user.interviewCoin
+    })
+    } catch (error) {
+
+      return res.status(500).json({
+        success:false,
+        message:error.message
+      })
+      
+    }
+  }

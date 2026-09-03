@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { motion } from "motion/react";
+import { motion } from "framer-motion"; // Changed from motion/react for standard import
 import { useNavigate } from "react-router";
 import {
   HiOutlineCloudUpload,
@@ -14,6 +14,7 @@ import {
 import api from "../utils/axios";
 import { useDispatch, useSelector } from "react-redux";
 import { setResume } from "../redux/resumeSlice";
+import { usecoins } from "../apis/user.api";
 
 // ---- helpers -------------------------------------------------------------
 
@@ -96,7 +97,7 @@ const SectionCard = ({ icon, iconColor, title, children }) => (
   </motion.div>
 );
 
-// ---- navbar (unchanged) ---------------------------------------------------
+// ---- navbar ---------------------------------------------------
 
 const Navbar = ({ label }) => {
   const navigate = useNavigate();
@@ -129,7 +130,7 @@ const Navbar = ({ label }) => {
 
 // ---- main component --------------------------------------------------------
 
-function Scorer({ user, setUser }) {
+function Scorer({ user, setuser: setUser }) {
   const [file, setFile] = useState(null);
   const [loading, setLoading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
@@ -168,8 +169,22 @@ function Scorer({ user, setUser }) {
     }
     try {
       setLoading(true);
+
+      const coinresponse = await usecoins({
+        coins: 10,
+        action: "resume-scorer",
+      });
+
+      if (typeof setUser === "function") {
+        setUser((prev) => ({
+          ...prev,
+          interviewCoin: coinresponse?.interviewCoin,
+        }));
+      }
+
       const formdata = new FormData();
       formdata.append("resume", file);
+
       const response = await api.post("/api/resume/upload", formdata);
       dispatch(setResume(response?.data?.data));
       setLoading(false);
@@ -317,7 +332,7 @@ function Scorer({ user, setUser }) {
     );
   }
 
-  // ---- upload view (unchanged) --------------------------------------------
+  // ---- upload view --------------------------------------------
 
   return (
     <div className="min-h-screen bg-white pt-24 pb-12 flex flex-col items-center justify-center select-none">

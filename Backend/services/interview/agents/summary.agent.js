@@ -1,5 +1,5 @@
 import { response } from "express";
-import llm from "../config/llm";
+import llm from "../config/llm.js";
 import summaryPrompt from "../prompts/summaryPrompt.js";
 
 

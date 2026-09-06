@@ -2,8 +2,8 @@ import { END, START, StateGraph } from "@langchain/langgraph";
 import InterviewState from "./state.js";
 import { feedbackNode, interviewNode } from "./nodes.js";
 import { summaryAgent } from "../agents/summary.agent.js";
-import { interviewAgent } from "../agents/interview.agent";
-import { feedbackAgent } from "../agents/feedback.agent";
+import { interviewAgent } from "../agents/interview.agent.js";
+import { feedbackAgent } from "../agents/feedback.agent.js";
 
 function router(state){
   switch(state.action){

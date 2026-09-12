@@ -45,8 +45,8 @@ function Step2interview({ interviewData, user, onSubmitAnswer }) {
   const [feedback, setFeedback] = useState(null);
   const [loading, setLoading] = useState(false);
   const [finished, setFinished] = useState(false);
-  const [timeLeft, setTimeLeft] = useState(interviewData.question.timer || 60);
-  const [timerActive, setTimerActive] = useState(true); // paused once the answer is submitted
+  const [timeLeft, setTimeLeft] = useState(interviewData.question?.timer || 60);
+  const [timerActive, setTimerActive] = useState(true);
 
   const totalQuestions =
     interviewData.totalQuestions ?? interviewData.totalQuestion ?? 1;
@@ -75,14 +75,11 @@ function Step2interview({ interviewData, user, onSubmitAnswer }) {
   const videoSource = voiceGender === "female" ? femalevideo : malevideo;
   const showMicOn = micOn && !isAIPlaying;
 
+  // User display name — safely derived from prop
+  const userName = user?.name || "there";
+
   // ---------------------------------------------------------------------
-  // Reset local state ONLY when the parent hands us a genuinely new
-  // interview session (different interviewId). We do NOT reset on every
-  // `interviewData.currentQuestion` change here — that used to be the only
-  // trigger that moved the UI to the next question, and if the parent never
-  // re-passes a fresh `interviewData` after submit, the component just sits
-  // there forever. Question advancement now happens locally in
-  // `advanceToNextQuestion`, right after a successful submit.
+  // Reset local state when a new interview session starts (different ID)
   // ---------------------------------------------------------------------
   useEffect(() => {
     setQuestion(interviewData.question);
@@ -108,25 +105,25 @@ function Step2interview({ interviewData, user, onSubmitAnswer }) {
       const t = e.results[e.results.length - 1][0].transcript;
       setAnswer((prev) => (prev ? prev + " " + t : t));
     };
-    rec.onerror = () => {};
+    rec.onerror = () => { };
     recognitionRef.current = rec;
 
     return () => {
       try {
         rec.stop();
-      } catch (_) {}
+      } catch (_) { }
     };
   }, []);
 
   const startMic = () => {
     try {
       recognitionRef.current?.start();
-    } catch (_) {}
+    } catch (_) { }
   };
   const stopMic = () => {
     try {
       recognitionRef.current?.stop();
-    } catch (_) {}
+    } catch (_) { }
   };
 
   const toggleMic = () => {
@@ -172,8 +169,104 @@ function Step2interview({ interviewData, user, onSubmitAnswer }) {
   }, []);
 
   // ---------------------------------------------------------------------
-  // AI speaks the question
-  // --------------------------
+  // Voice loading
+  // ---------------------------------------------------------------------
+  useEffect(() => {
+    const load = () => {
+      const voices = window.speechSynthesis.getVoices();
+      if (!voices.length) return;
+      const female = voices.find((v) => /zira|samantha|female/i.test(v.name));
+      const male = voices.find((v) => /david|mark|male/i.test(v.name));
+      if (female) {
+        setSelectedVoice(female);
+        setVoiceGender("female");
+      } else if (male) {
+        setSelectedVoice(male);
+        setVoiceGender("male");
+      } else {
+        setSelectedVoice(voices[0]);
+        setVoiceGender("female");
+      }
+    };
+    load();
+    window.speechSynthesis.onvoiceschanged = load;
+  }, []);
+
+  // ---------------------------------------------------------------------
+  // speakText — returns a real Promise so it can be awaited
+  // ---------------------------------------------------------------------
+  const speakText = (text) => {
+    return new Promise((resolve) => {
+      if (!window.speechSynthesis || !text?.trim()) {
+        resolve();
+        return;
+      }
+
+      window.speechSynthesis.cancel();
+
+      setTimeout(() => {
+        const utter = new SpeechSynthesisUtterance(
+          text.replace(/,/g, ", ... ").replace(/\./g, ". ... "),
+        );
+        if (selectedVoice) utter.voice = selectedVoice;
+        utter.rate = 0.92;
+        utter.pitch = 1.05;
+        utter.volume = 1;
+        utter.onstart = () => {
+          setIsAIPlaying(true);
+          setSubtitle(text);
+          stopMic();
+          aiVideoRef.current?.play().catch(() => { });
+        };
+        utter.onend = () => {
+          aiVideoRef.current?.pause();
+          setIsAIPlaying(false);
+          if (micOn) startMic();
+          setTimeout(() => {
+            setSubtitle("");
+            resolve();
+          }, 300);
+        };
+        utter.onerror = () => resolve();
+        setSubtitle(text);
+        window.speechSynthesis.speak(utter);
+      }, 150);
+    });
+  };
+
+  // ---------------------------------------------------------------------
+  // Intro speech — runs once when voice is ready
+  // ---------------------------------------------------------------------
+  useEffect(() => {
+    if (!selectedVoice || introSpoken) return;
+
+    const runIntro = async () => {
+      setIntroSpoken(true);
+      await new Promise((r) => setTimeout(r, 1200));
+      await speakText(`Welcome ${userName.split(" ")[0]}! Let's begin your interview.`);
+      await new Promise((r) => setTimeout(r, 900));
+      const questionText =
+        interviewData.question?.question ||
+        interviewData.question?.text ||
+        "";
+      if (questionText) await speakText(questionText);
+    };
+
+    runIntro();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedVoice]);
+
+  // ---------------------------------------------------------------------
+  // Speak whenever question changes (after the intro)
+  // ---------------------------------------------------------------------
+  useEffect(() => {
+    if (!introSpoken || finished) return;
+    const text = question?.question || question?.text || "";
+    if (text) speakQuestion(text);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [question]);
+
+  // Simple, synchronous-style speak for question transitions
   const speakQuestion = (text) => {
     if (!text || !("speechSynthesis" in window)) return;
     window.speechSynthesis.cancel();
@@ -191,7 +284,7 @@ function Step2interview({ interviewData, user, onSubmitAnswer }) {
     utter.onstart = () => {
       setIsAIPlaying(true);
       setSubtitle(text);
-      aiVideoRef.current?.play().catch(() => {});
+      aiVideoRef.current?.play().catch(() => { });
     };
     utter.onend = () => {
       setIsAIPlaying(false);
@@ -202,16 +295,11 @@ function Step2interview({ interviewData, user, onSubmitAnswer }) {
       }, 300);
     };
     setSubtitle(text);
-
     window.speechSynthesis.speak(utter);
   };
 
-  useEffect(() => {
-    if (finished) return;
-    speakQuestion(question?.text || question?.question || "");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [question, finished]);
-
+  // ---------------------------------------------------------------------
+  // Timer countdown
   // ---------------------------------------------------------------------
   useEffect(() => {
     if (timeLeft <= 0 || !timerActive) {
@@ -236,9 +324,13 @@ function Step2interview({ interviewData, user, onSubmitAnswer }) {
     setCodeOpen(false);
   };
 
+  // ---------------------------------------------------------------------
+  // Advance to next question after successful submit
+  // ---------------------------------------------------------------------
   const advanceToNextQuestion = (result) => {
     const nextIndex = currentIndex + 1;
 
+    // Try to get next question from various response shapes
     const nextQuestion =
       result?.question ??
       result?.nextQuestion ??
@@ -273,6 +365,8 @@ function Step2interview({ interviewData, user, onSubmitAnswer }) {
     if (loading || finished) return;
     setTimerActive(false);
     setLoading(true);
+    stopMic();
+    window.speechSynthesis.cancel();
 
     try {
       let result = null;
@@ -284,11 +378,38 @@ function Step2interview({ interviewData, user, onSubmitAnswer }) {
           auto,
         });
       }
-      setFeedback(result?.feedback ?? null);
+
+      if (!result) return; // Safety check
+
+      // 1. UI pe feedback dikhao
+      setFeedback(result.feedback ?? null);
+
+      // 2. 700ms ka wait (jaise images mein hai) taaki UI update ho jaye
+      await new Promise((r) => setTimeout(r, 700));
+
+      // 3. Agar interview complete ho gaya (Last Question)
+      if (result.completed) {
+        await speakText(
+          result.feedback?.feedback || "Great job! Your interview is complete. Preparing your report."
+        );
+
+        // Note: Agar navigation yahi se karni hai (jaise image_11ea59.jpg mein navigate hai), 
+        // toh yahan add kar sakte ho. Warna parent component handle kar lega.
+        return;
+      }
+
+      // 4. Agar next question bacha hai
+      await speakText(
+        result.feedback?.feedback || "Noted your answer. Let's move to the next question."
+      );
+
+      // Feedback clear karo naye question ke liye (jaise image_11ea7d.png mein hai)
+      setFeedback(null);
       advanceToNextQuestion(result);
+
     } catch (err) {
       console.error("Failed to submit answer:", err);
-      setTimerActive(true); // let them retry instead of getting stuck silently
+      setTimerActive(true);
     } finally {
       setLoading(false);
     }
@@ -300,79 +421,6 @@ function Step2interview({ interviewData, user, onSubmitAnswer }) {
       handleSubmit(false);
     }
   };
-
-  useEffect(() => {
-    const load = () => {
-      const voices = window.speechSynthesis.getVoices();
-      if (!voices.length) return;
-      const female = voices.find((v) => /zira|samantha|female/i.test(v.name));
-      const male = voices.find((v) => /david|mark|male/i.test(v.name));
-      if (female) {
-        setSelectedVoice(female);
-        setVoiceGender("female");
-      } else if (male) {
-        setSelectedVoice(male);
-        setVoiceGender("male");
-      } else {
-        setSelectedVoice(voices[0]);
-        setVoiceGender("female");
-      }
-    };
-    load();
-    window.speechSynthesis.onvoiceschanged = load;
-  }, []);
-
-  const speakText = (text) => {
-    new Promise((resolve) => {
-      if (!window.speechSynthesis || !selectedVoice || !text?.trim()) {
-        resolve();
-        return;
-      }
-
-      window.speechSynthesis.cancel();
-
-      setTimeout(() => {
-        const utter = new SpeechSynthesisUtterance(
-          text.replace(/,/g, ", ... ").replace(/\./g, ". ... "),
-        );
-        utter.voice = selectedVoice;
-        utter.rate = 0.92;
-        utter.pitch = 1.05;
-        utter.volume = 1;
-        utter.onstart = () => {
-          setIsAIPlaying(true);
-          stopMic();
-          aiVideoRef.current?.play();
-        };
-        utter.onend = () => {
-          aiVideoRef.current?.pause();
-          setIsAIPlaying(false);
-          if (micOn) startMic();
-          setTimeout(() => {
-            setSubtitle("");
-            resolve();
-          }, 300);
-        };
-        setSubtitle(text);
-        window.speechSynthesis.speak(utter);
-      }, 150);
-    });
-  };
-
-  useEffect(() => {
-    if (!selectedVoice || introSpoken) {
-      return;
-    }
-    const runIntro = async () => {
-      setIntroSpoken(true);
-      await new Promise((r) => setTimeout(r, 1200));
-      await speakText(
-        `Welcome ${userName.split(" ")[0]}! Let's begin your interview `,
-      );
-      await new Promise((r) => setTimeout(r, 900));
-      await speakText(interviewData.question.question);
-    };
-  });
 
   return (
     <div className="min-h-screen w-full bg-[#0a0a0b] flex items-center justify-center p-4 sm:p-8">
@@ -440,11 +488,10 @@ function Step2interview({ interviewData, user, onSubmitAnswer }) {
               whileTap={{ scale: 0.94 }}
               onClick={toggleMic}
               disabled={isAIPlaying}
-              className={`w-11 h-11 rounded-xl flex items-center justify-center border transition-colors ${
-                showMicOn
-                  ? "bg-white/10 border-white/15 text-white"
-                  : "bg-red-500/10 border-red-500/30 text-red-400"
-              } disabled:opacity-40`}
+              className={`w-11 h-11 rounded-xl flex items-center justify-center border transition-colors ${showMicOn
+                ? "bg-white/10 border-white/15 text-white"
+                : "bg-red-500/10 border-red-500/30 text-red-400"
+                } disabled:opacity-40`}
               title={micOn ? "Mute microphone" : "Unmute microphone"}
             >
               {showMicOn ? <FiMic size={18} /> : <FiMicOff size={18} />}
@@ -454,11 +501,10 @@ function Step2interview({ interviewData, user, onSubmitAnswer }) {
               whileHover={{ scale: 1.06 }}
               whileTap={{ scale: 0.94 }}
               onClick={toggleCamera}
-              className={`w-11 h-11 rounded-xl flex items-center justify-center border transition-colors ${
-                cameraOn
-                  ? "bg-white/10 border-white/15 text-white"
-                  : "bg-[#1c1c1f] border-white/10 text-white/50"
-              }`}
+              className={`w-11 h-11 rounded-xl flex items-center justify-center border transition-colors ${cameraOn
+                ? "bg-white/10 border-white/15 text-white"
+                : "bg-[#1c1c1f] border-white/10 text-white/50"
+                }`}
               title={cameraOn ? "Turn camera off" : "Turn camera on"}
             >
               {cameraOn ? <FiVideo size={18} /> : <FiVideoOff size={18} />}
@@ -528,7 +574,7 @@ function Step2interview({ interviewData, user, onSubmitAnswer }) {
                   </span>
                 </div>
                 <p className="text-white text-base sm:text-lg font-medium leading-snug">
-                  {question?.text || question?.question}
+                  {question?.question || question?.text}
                 </p>
               </motion.div>
 
@@ -561,6 +607,27 @@ function Step2interview({ interviewData, user, onSubmitAnswer }) {
                   className="flex-1 min-h-[160px] w-full rounded-2xl border border-white/5 bg-[#161618] p-4 text-sm text-white placeholder-white/25 outline-none focus:border-white/20 resize-none transition-colors"
                 />
               </div>
+
+              {/* Per-question feedback (shown briefly before advancing) */}
+              <AnimatePresence>
+                {feedback && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 6 }}
+                    className="rounded-xl border border-gray-500/20 bg-green-500/5 p-4 max-h-40 overflow-y-auto"
+                  >
+                    <p className="text-xs uppercase tracking-widest text-green-400 mb-2">
+                      AI Feedback
+                    </p>
+                    <p className="text-sm text-zinc-300 leading-6">
+                      {typeof feedback === "string"
+                        ? feedback
+                        : feedback?.feedback || JSON.stringify(feedback)}
+                    </p>
+                  </motion.div>
+                )}
+              </AnimatePresence>
 
               <div className="flex items-center justify-between">
                 <p className="text-white/30 text-xs">
@@ -612,23 +679,6 @@ function Step2interview({ interviewData, user, onSubmitAnswer }) {
                 onSubmitCode={handleSubmitCode}
               />
             </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-      <AnimatePresence>
-        {feedback && (
-          <motion.div
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 6 }}
-            className="rounded-xl border border-gray-500/20 bg-green-500/5 p-4 max-h-40 overflow-y-auto"
-          >
-            <p className="text-xs uppercase tracking-widest text-green-400 mb-2">
-              AI Feedback
-            </p>
-            <p className="text-sm text-zinc-300 leading-6">
-              {feedback.feedback}
-            </p>
           </motion.div>
         )}
       </AnimatePresence>

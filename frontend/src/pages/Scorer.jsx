@@ -167,6 +167,13 @@ function Scorer({ user, setuser: setUser }) {
       alert("Please select a PDF file first.");
       return;
     }
+
+    // Check coin balance first
+    if ((user?.interviewCoin ?? 0) < 10) {
+      alert("Not enough coins! You need 10 coins to score a resume.");
+      return;
+    }
+
     try {
       setLoading(true);
 
@@ -191,7 +198,11 @@ function Scorer({ user, setuser: setUser }) {
       alert("Resume uploaded successfully!");
     } catch (error) {
       console.log(error);
-      alert("Upload failed");
+      if (error.response?.status === 403) {
+        alert("Not enough coins!");
+      } else {
+        alert("Upload failed");
+      }
       setLoading(false);
     }
   };

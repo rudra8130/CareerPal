@@ -19,7 +19,7 @@ export const usecoins = async (data)=>{
     return response.data
     
   } catch (error) {
-    return null
-    
+    // Re-throw so callers can detect 403 "Not enough coins"
+    throw error
   }
 }

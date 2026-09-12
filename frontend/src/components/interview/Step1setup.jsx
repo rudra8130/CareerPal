@@ -47,6 +47,13 @@ function Step1setup({ user, setuser: setUser }) {
       alert("Please select a PDF file first.");
       return;
     }
+
+    // Check coin balance first
+    if ((user?.interviewCoin ?? 0) < 10) {
+      alert("Not enough coins! You need 10 coins to upload a resume.");
+      return;
+    }
+
     try {
       setuploading(true);
 
@@ -71,7 +78,11 @@ function Step1setup({ user, setuser: setUser }) {
       alert("Resume uploaded successfully!");
     } catch (error) {
       console.log(error);
-      alert("Upload failed");
+      if (error.response?.status === 403) {
+        alert("Not enough coins!");
+      } else {
+        alert("Upload failed");
+      }
       setuploading(false);
     }
   };
@@ -83,28 +94,40 @@ function Step1setup({ user, setuser: setUser }) {
       return;
     }
 
+    // Check coin balance first
+    if ((user?.interviewCoin ?? 0) < 50) {
+      alert("Not enough coins! You need 50 coins to start an interview.");
+      return;
+    }
+
     try {
       setstarting(true);
+
+      // Deduct coins BEFORE starting interview
+      const coinresponse = await usecoins({
+        coins: 50,
+        action: "start-interview",
+      });
+
+      if (typeof setUser === "function") {
+        setUser((prev) => ({
+          ...prev,
+          interviewCoin: coinresponse?.interviewCoin,
+        }));
+      }
+
       const response = await startInterview({ role, type, useResume, resume });
 
       if (response) {
-        const coinresponse = await usecoins({
-          coins: 50,
-          action: "start-interview",
-        });
-
-        if (typeof setUser === "function") {
-          setUser((prev) => ({
-            ...prev,
-            interviewCoin: coinresponse?.interviewCoin,
-          }));
-        }
-
         navigate(`/interview/${response.interviewId}`);
       }
     } catch (error) {
       console.log(error);
-      alert("Failed to start interview");
+      if (error.response?.status === 403) {
+        alert("Not enough coins!");
+      } else {
+        alert("Failed to start interview");
+      }
     } finally {
       setstarting(false);
     }

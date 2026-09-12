@@ -121,7 +121,7 @@ function App() {
           path="/interview/:id/report"
           element={
             user ? (
-              <InterviewReport user={user} setuser={setuser} />
+              <InterviewReport user={user} setUser={setuser} />
             ) : (
               <Navigate to="/" />
             )

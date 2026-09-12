@@ -7,8 +7,8 @@ const llm = new ChatGroq({
     temperature: 0.2,
     maxTokens: 2500,
     maxRetries: 2,
-    apiKey:process.env.GROQ_API_KEY
-    
+    apiKey: process.env.GROQ_API_KEY
+
 })
 
 export default llm

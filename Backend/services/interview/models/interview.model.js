@@ -120,7 +120,7 @@ recommendations:{
   type:[String],
   default:[]
 },
-  summay:{
+  summary:{
     type:String,
     default:""
   },

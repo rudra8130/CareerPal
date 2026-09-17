@@ -1,5 +1,7 @@
 import graph from "../graph/graph.js";
+import InterviewState from "../graph/state.js";
 import Interview from "../models/interview.model.js";
+import redis from "../../../shared/redis/redis.js";
 
 export const startInterview = async (req, res) => {
   try {
@@ -41,14 +43,16 @@ export const startInterview = async (req, res) => {
       role,
       useResume,
       questions,
-      currentQuestion: 0,   // fixed: was "currentQuestions" (typo)
+      currentQuestion: 0,
       status: "in progress",
     });
+
+    await redis.del(`interviews:${userId}`);
 
     return res.status(200).json({
       success: true,
       interviewId: interview._id,
-      currentQuestion: 0,   // fixed: was "currentQuestions" (typo)
+      currentQuestion: 0,
       totalQuestions: interview.questions.length,
       question: interview.questions[0],
     });
@@ -61,14 +65,12 @@ export const startInterview = async (req, res) => {
   }
 };
 
-
 export const submitAnswer = async (req, res) => {
   try {
     const userId = req.headers["x-user-id"];
 
     const { interviewId, answer } = req.body;
 
-    // fixed: was && (both required means OR should reject)
     if (!interviewId || !answer) {
       return res.status(400).json({
         success: false,
@@ -95,11 +97,10 @@ export const submitAnswer = async (req, res) => {
       });
     }
 
-    const index = interview.currentQuestion;   // fixed: was "currentQuestions"
+    const index = interview.currentQuestion;
 
     const currentQuestion = interview.questions[index];
 
-    // fixed: was "currentQuestions" (undefined variable)
     if (!currentQuestion) {
       return res.status(400).json({
         success: false,
@@ -109,7 +110,6 @@ export const submitAnswer = async (req, res) => {
 
     currentQuestion.userAnswer = answer;
 
-    // fixed: was "interview.currentQuestion + 1" but field is currentQuestion
     const completed = interview.currentQuestion + 1 >= interview.questions.length;
 
     const result = await graph.invoke({
@@ -124,7 +124,7 @@ export const submitAnswer = async (req, res) => {
     });
 
     currentQuestion.feedback = result.feedback;
-    interview.currentQuestion++;   // increment the correct field
+    interview.currentQuestion++;
 
     if (completed) {
       interview.status = "completed";
@@ -136,6 +136,7 @@ export const submitAnswer = async (req, res) => {
       interview.recommendations = result.report?.recommendations ?? [];
 
       await interview.save();
+      await redis.del(`interviews:${userId}`);
 
       return res.status(200).json({
         success: true,
@@ -145,6 +146,7 @@ export const submitAnswer = async (req, res) => {
     }
 
     await interview.save();
+    await redis.del(`interviews:${userId}`);
 
     return res.status(200).json({
       success: true,
@@ -161,7 +163,6 @@ export const submitAnswer = async (req, res) => {
     });
   }
 };
-
 
 export const getInterview = async (req, res) => {
   try {
@@ -184,6 +185,126 @@ export const getInterview = async (req, res) => {
       success: true,
       interview,
     });
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// Builds the 8-axis radar object the frontend chart expects:
+// { correctness, clarity, relevance, detail, efficiency, communication, problemsolving, creativity }
+const EMPTY_RADAR = {
+  correctness: 0,
+  clarity: 0,
+  relevance: 0,
+  detail: 0,
+  efficiency: 0,
+  communication: 0,
+  problemsolving: 0,
+  creativity: 0,
+};
+
+function getAverageData(list) {
+  if (!list.length) {
+    return { ...EMPTY_RADAR };
+  }
+
+  const total = { ...EMPTY_RADAR };
+  let count = 0;
+
+  list.forEach((interview) => {
+    interview.questions.forEach((q) => {
+      if (!q.feedback) return;
+      total.correctness += q.feedback.correctness || 0;
+      total.clarity += q.feedback.clarity || 0;
+      total.relevance += q.feedback.relevance || 0;
+      total.detail += q.feedback.detail || 0;
+      total.efficiency += q.feedback.efficiency || 0;
+      total.communication += q.feedback.communication || 0;
+      total.problemsolving += q.feedback.problemSolving || 0;
+      total.creativity += q.feedback.creativity || 0;
+      count++;
+    });
+  });
+
+  if (count === 0) {
+    return { ...EMPTY_RADAR };
+  }
+
+  return {
+    correctness: Math.round(total.correctness / count),
+    clarity: Math.round(total.clarity / count),
+    relevance: Math.round(total.relevance / count),
+    detail: Math.round(total.detail / count),
+    efficiency: Math.round(total.efficiency / count),
+    communication: Math.round(total.communication / count),
+    problemsolving: Math.round(total.problemsolving / count),
+    creativity: Math.round(total.creativity / count),
+  };
+}
+
+export const getAllInterviews = async (req, res) => {
+  try {
+    const userId = req.headers["x-user-id"];
+
+    const cacheKey = `interviews:${userId}`;
+    const cache = await redis.get(cacheKey);
+
+    if (cache) {
+      console.log("Data served from redis");
+      return res.status(200).json(JSON.parse(cache));
+    }
+
+    const interviews = await Interview.find({ userId }).sort({ createdAt: -1 });
+
+    const completed = interviews.filter((item) => item.status === "completed");
+
+    const questionsSolved = interviews.reduce(
+      (sum, item) => sum + item.questions.length,
+      0
+    );
+
+    const averageScore =
+      completed.length > 0
+        ? Number(
+          (
+            completed.reduce((sum, item) => sum + item.overallScore, 0) /
+            completed.length
+          ).toFixed(1)
+        )
+        : 0;
+
+    const stats = {
+      totalInterviews: interviews.length,
+      questionsSolved,
+      completed: completed.length,
+      averageScore,
+    };
+
+    const technicalInterviews = completed.filter((item) => item.type === "technical");
+    const hrInterviews = completed.filter((item) => item.type === "hr");
+
+    const technicalData = getAverageData(technicalInterviews);
+    const hrData = getAverageData(hrInterviews);
+    const technicalCount = technicalInterviews.length;
+    const hrCount = hrInterviews.length;
+
+    const payload = {
+      success: true,
+      interviews,
+      stats,
+      technicalData,
+      hrData,
+      technicalCount,
+      hrCount,
+    };
+
+    await redis.set(cacheKey, JSON.stringify(payload), "EX", 600);
+
+    return res.status(200).json(payload);
   } catch (error) {
     console.log(error);
     return res.status(500).json({

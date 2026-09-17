@@ -1,7 +1,6 @@
 import { END, START, StateGraph } from "@langchain/langgraph";
 import InterviewState from "./state.js";
-import { feedbackNode, interviewNode } from "./nodes.js";
-import { summaryAgent } from "../agents/summary.agent.js";
+import { feedbackNode, interviewNode, summary } from "./nodes.js";
 import { interviewAgent } from "../agents/interview.agent.js";
 import { feedbackAgent } from "../agents/feedback.agent.js";
 
@@ -30,7 +29,7 @@ function feedbackRouter(state){
 const graph = new StateGraph(InterviewState)
 .addNode("interviewAgent", interviewNode)
 .addNode("feedbackAgent", feedbackNode)
-.addNode("summaryAgent", summaryAgent)
+.addNode("summaryAgent", summary)
 .addConditionalEdges(
   START,
   router,

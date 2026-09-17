@@ -1,6 +1,6 @@
 import React, { useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   FiArrowLeft,
   FiDownload,
@@ -11,7 +11,17 @@ import {
   FiAward,
   FiTarget,
   FiZap,
+  FiChevronDown,
 } from "react-icons/fi";
+import {
+  Radar,
+  RadarChart,
+  PolarGrid,
+  PolarAngleAxis,
+  PolarRadiusAxis,
+  ResponsiveContainer,
+  Tooltip,
+} from "recharts";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -47,7 +57,7 @@ function ScoreRing({ score, size = 120, strokeWidth = 8 }) {
         : "stroke-red-400";
 
   return (
-    <div className="relative" style={{ width: size, height: size }}>
+    <div className="relative flex items-center justify-center" style={{ width: size, height: size }}>
       <svg width={size} height={size} className="-rotate-90">
         <circle
           cx={size / 2}
@@ -68,39 +78,13 @@ function ScoreRing({ score, size = 120, strokeWidth = 8 }) {
           strokeDasharray={circumference}
           initial={{ strokeDashoffset: circumference }}
           animate={{ strokeDashoffset: offset }}
-          transition={{ duration: 1.2, ease: "easeOut", delay: 0.3 }}
+          transition={{ duration: 1.5, ease: "easeOut", delay: 0.2 }}
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-3xl font-bold text-white">{safeScore}</span>
-        <span className="text-[10px] text-white/40 uppercase tracking-wider">Score</span>
+        <span className="text-3xl font-bold text-white tracking-tighter">{safeScore}</span>
+        <span className="text-[10px] text-white/40 uppercase tracking-widest mt-0.5">Score</span>
       </div>
-    </div>
-  );
-}
-
-function MetricBar({ label, value }) {
-  const safeValue = Math.min(10, Math.max(0, value || 0));
-  const pct = (safeValue / 10) * 100;
-  const color =
-    safeValue >= 7
-      ? "bg-emerald-400"
-      : safeValue >= 4
-        ? "bg-amber-400"
-        : "bg-red-400";
-
-  return (
-    <div className="flex items-center gap-3">
-      <span className="text-xs text-white/50 w-28 shrink-0 text-right">{label}</span>
-      <div className="flex-1 h-1.5 rounded-full bg-white/5 overflow-hidden">
-        <motion.div
-          className={`h-full rounded-full ${color}`}
-          initial={{ width: 0 }}
-          animate={{ width: `${pct}%` }}
-          transition={{ duration: 0.8, ease: "easeOut", delay: 0.4 }}
-        />
-      </div>
-      <span className="text-xs text-white/60 w-6 text-right font-medium">{safeValue}</span>
     </div>
   );
 }
@@ -108,29 +92,62 @@ function MetricBar({ label, value }) {
 function TagList({ items, icon: Icon, color = "emerald" }) {
   if (!items || items.length === 0) return null;
   const colors = {
-    emerald: { bg: "bg-emerald-500/8", border: "border-emerald-500/15", text: "text-emerald-400", icon: "text-emerald-400" },
-    red: { bg: "bg-red-500/8", border: "border-red-500/15", text: "text-red-400", icon: "text-red-400" },
-    blue: { bg: "bg-blue-500/8", border: "border-blue-500/15", text: "text-blue-400", icon: "text-blue-400" },
+    emerald: { bg: "bg-emerald-500/10", border: "border-emerald-500/20", text: "text-emerald-300", icon: "text-emerald-400" },
+    red: { bg: "bg-red-500/10", border: "border-red-500/20", text: "text-red-300", icon: "text-red-400" },
+    blue: { bg: "bg-blue-500/10", border: "border-blue-500/20", text: "text-blue-300", icon: "text-blue-400" },
+    amber: { bg: "bg-amber-500/10", border: "border-amber-500/20", text: "text-amber-300", icon: "text-amber-400" },
   };
-  const c = colors[color];
+  const c = colors[color] || colors.emerald;
 
   return (
     <div className="flex flex-wrap gap-2">
       {items.map((item, i) => (
-        <motion.span
+        <span
           key={i}
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: 0.1 * i }}
-          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border ${c.bg} ${c.border} ${c.text}`}
+          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border ${c.bg} ${c.border} ${c.text} shadow-sm backdrop-blur-sm`}
         >
-          <Icon size={12} className={c.icon} />
+          {Icon && <Icon size={12} className={c.icon} />}
           {item}
-        </motion.span>
+        </span>
       ))}
     </div>
   );
 }
+
+// ---------------------------------------------------------------------------
+// Animations
+// ---------------------------------------------------------------------------
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.1,
+      delayChildren: 0.1
+    },
+  },
+};
+
+const itemVariants = {
+  hidden: { opacity: 0, y: 20 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.5, ease: "easeOut" },
+  },
+};
+
+const CustomTooltip = ({ active, payload }) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-[#111113]/90 border border-white/10 backdrop-blur-md p-3 rounded-xl shadow-xl">
+        <p className="text-white/80 text-xs font-medium mb-1">{payload[0].payload.label}</p>
+        <p className="text-emerald-400 text-sm font-bold">{payload[0].value} <span className="text-white/40 text-[10px] font-normal">/ 10</span></p>
+      </div>
+    );
+  }
+  return null;
+};
 
 // ---------------------------------------------------------------------------
 // Main Component
@@ -138,9 +155,10 @@ function TagList({ items, icon: Icon, color = "emerald" }) {
 function Step3report({ user, setUser, report }) {
   const navigate = useNavigate();
   const reportRef = useRef();
+  const [expandedQuestion, setExpandedQuestion] = React.useState(0);
 
   const questions = report?.questions || [];
-  const overallScore = report?.overallScore || 0;
+  
   const avgQuestionScore =
     questions.length > 0
       ? Math.round(
@@ -149,11 +167,18 @@ function Step3report({ user, setUser, report }) {
       )
       : 0;
 
+  // Sometimes feedback is nested in report.feedback depending on the backend structure
+  const overallScore = report?.overallScore || report?.feedback?.overallScore || avgQuestionScore || 0;
+  const summary = report?.summary || report?.feedback?.summary || "";
+  const strengths = report?.strengths || report?.feedback?.strengths || [];
+  const weaknesses = report?.weaknesses || report?.feedback?.weaknesses || [];
+  const recommendations = report?.recommendations || report?.feedback?.recommendations || [];
+
   // Aggregate metrics across all questions
   const aggregatedMetrics = METRIC_LABELS.map(({ key, label }) => {
     const total = questions.reduce((s, q) => s + (q.feedback?.[key] || 0), 0);
     const avg = questions.length > 0 ? Math.round((total / questions.length) * 10) / 10 : 0;
-    return { key, label, value: avg };
+    return { key, label, value: avg, fullMark: 10 };
   });
 
   const handlePrint = () => {
@@ -161,281 +186,343 @@ function Step3report({ user, setUser, report }) {
   };
 
   return (
-    <div className="min-h-screen w-full bg-[#0a0a0b] text-white">
-      <div ref={reportRef} className="max-w-5xl mx-auto px-4 sm:px-8 py-8 sm:py-12">
+    <div className="min-h-screen w-full bg-[#050505] text-white overflow-x-hidden selection:bg-white/20">
+      {/* Background Glows */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden flex items-center justify-center">
+        <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] rounded-full bg-emerald-500/5 blur-[120px]" />
+        <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] rounded-full bg-blue-500/5 blur-[120px]" />
+      </div>
 
-        {/* Header */}
+      <div ref={reportRef} className="max-w-6xl mx-auto px-4 sm:px-8 py-8 sm:py-12 relative z-10">
         <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="flex items-center justify-between mb-10"
+          variants={containerVariants}
+          initial="hidden"
+          animate="visible"
+          className="space-y-6"
         >
-          <div className="flex items-center gap-3">
+          {/* Header */}
+          <motion.div variants={itemVariants} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+            <div className="flex items-center gap-4">
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => navigate("/dashboard")}
+                className="w-10 h-10 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 transition-all shadow-lg backdrop-blur-sm"
+              >
+                <FiArrowLeft size={18} />
+              </motion.button>
+              <div>
+                <h1 className="text-2xl sm:text-3xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white to-white/60">
+                  Interview Report
+                </h1>
+                <div className="flex items-center gap-2 mt-1.5">
+                  <span className="px-2 py-0.5 rounded text-[10px] font-semibold uppercase bg-white/10 text-white/70 border border-white/5">
+                    {report?.role || "Role"}
+                  </span>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-semibold uppercase bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                    {report?.type || "Type"}
+                  </span>
+                  <span className="text-xs text-white/40">{questions.length} Questions</span>
+                </div>
+              </div>
+            </div>
             <motion.button
-              whileHover={{ x: -3 }}
-              onClick={() => navigate("/dashboard")}
-              className="w-9 h-9 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-white/60 hover:text-white transition-colors"
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
+              onClick={handlePrint}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white/5 border border-white/10 text-sm font-medium text-white/80 hover:text-white hover:bg-white/10 transition-all shadow-lg backdrop-blur-sm print:hidden self-start sm:self-auto"
             >
-              <FiArrowLeft size={16} />
+              <FiDownload size={16} />
+              Export PDF
             </motion.button>
-            <div>
-              <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Interview Report</h1>
-              <p className="text-xs text-white/35 mt-0.5">
-                {report?.role} • {report?.type?.toUpperCase()} • {questions.length} Questions
-              </p>
-            </div>
-          </div>
-          <motion.button
-            whileHover={{ scale: 1.03 }}
-            whileTap={{ scale: 0.97 }}
-            onClick={handlePrint}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-xs text-white/70 hover:text-white transition-colors print:hidden"
-          >
-            <FiDownload size={14} />
-            Export
-          </motion.button>
-        </motion.div>
+          </motion.div>
 
-        {/* Score Overview Card */}
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="rounded-2xl border border-white/8 bg-[#111113] p-6 sm:p-8 mb-6"
-        >
-          <div className="flex flex-col sm:flex-row items-center gap-8">
-            <ScoreRing score={overallScore} />
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {/* Score Overview Card */}
+            <motion.div variants={itemVariants} className="lg:col-span-7 rounded-3xl border border-white/10 bg-[#111113]/80 backdrop-blur-md p-6 sm:p-8 shadow-2xl relative overflow-hidden group">
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-500/0 via-emerald-500/50 to-emerald-500/0 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+              <div className="flex flex-col sm:flex-row items-center sm:items-start gap-8">
+                <div className="shrink-0 drop-shadow-[0_0_15px_rgba(52,211,153,0.1)]">
+                   <ScoreRing score={overallScore} size={140} strokeWidth={10} />
+                </div>
+                
+                <div className="flex-1 w-full text-center sm:text-left">
+                  <div className="flex items-center justify-center sm:justify-start gap-2 mb-4">
+                    <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400">
+                       <FiAward size={18} />
+                    </div>
+                    <h2 className="text-base font-semibold text-white/90">Performance Summary</h2>
+                  </div>
 
-            <div className="flex-1 w-full">
-              <div className="flex items-center gap-2 mb-3">
-                <FiAward size={16} className="text-white/40" />
-                <span className="text-sm font-semibold text-white/70">Performance Overview</span>
+                  {summary && (
+                    <p className="text-sm text-white/60 leading-relaxed mb-6 font-medium">
+                      {summary}
+                    </p>
+                  )}
+
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="rounded-2xl bg-white/5 border border-white/10 p-3 sm:p-4 hover:bg-white/10 transition-colors">
+                      <span className="text-xl font-bold text-white tracking-tight">{overallScore}</span>
+                      <p className="text-[10px] text-white/40 uppercase tracking-widest mt-1">Overall</p>
+                    </div>
+                    <div className="rounded-2xl bg-white/5 border border-white/10 p-3 sm:p-4 hover:bg-white/10 transition-colors">
+                      <span className="text-xl font-bold text-white tracking-tight">{avgQuestionScore}</span>
+                      <p className="text-[10px] text-white/40 uppercase tracking-widest mt-1">Avg Score</p>
+                    </div>
+                    <div className="rounded-2xl bg-white/5 border border-white/10 p-3 sm:p-4 hover:bg-white/10 transition-colors">
+                      <span className="text-xl font-bold text-white tracking-tight">{questions.length}</span>
+                      <p className="text-[10px] text-white/40 uppercase tracking-widest mt-1">Questions</p>
+                    </div>
+                  </div>
+                </div>
               </div>
+            </motion.div>
 
-              {report?.summary && (
-                <p className="text-sm text-white/50 leading-relaxed mb-5">
-                  {report.summary}
-                </p>
+            {/* Radar Chart */}
+            <motion.div variants={itemVariants} className="lg:col-span-5 rounded-3xl border border-white/10 bg-[#111113]/80 backdrop-blur-md p-6 sm:p-8 shadow-2xl flex flex-col">
+              <div className="flex items-center gap-2 mb-4">
+                 <div className="p-1.5 rounded-lg bg-blue-500/10 text-blue-400">
+                    <FiTarget size={18} />
+                 </div>
+                 <h2 className="text-base font-semibold text-white/90">Skill Analysis</h2>
+              </div>
+              <div className="flex-1 w-full min-h-[250px] relative">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <RadarChart cx="50%" cy="50%" outerRadius="75%" data={aggregatedMetrics}>
+                      <PolarGrid stroke="rgba(255,255,255,0.1)" />
+                      <PolarAngleAxis 
+                         dataKey="label" 
+                         tick={{ fill: 'rgba(255,255,255,0.5)', fontSize: 10, fontWeight: 500 }} 
+                      />
+                      <PolarRadiusAxis angle={30} domain={[0, 10]} tick={false} axisLine={false} />
+                      <Tooltip content={<CustomTooltip />} />
+                      <Radar
+                        name="Skills"
+                        dataKey="value"
+                        stroke="#34d399"
+                        strokeWidth={2}
+                        fill="#34d399"
+                        fillOpacity={0.2}
+                        isAnimationActive={true}
+                        animationBegin={400}
+                        animationDuration={1500}
+                      />
+                    </RadarChart>
+                  </ResponsiveContainer>
+              </div>
+            </motion.div>
+          </div>
+
+          {/* Strengths / Weaknesses / Recommendations */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <motion.div variants={itemVariants} className="rounded-3xl border border-emerald-500/10 bg-emerald-500/[0.02] p-6 shadow-xl relative overflow-hidden group hover:bg-emerald-500/[0.04] transition-colors">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 blur-[50px] rounded-full translate-x-1/2 -translate-y-1/2" />
+              <div className="flex items-center gap-3 mb-5 relative z-10">
+                <div className="p-2 rounded-xl bg-emerald-500/20 text-emerald-400">
+                   <FiCheckCircle size={16} />
+                </div>
+                <h3 className="text-sm font-bold text-emerald-400 uppercase tracking-widest">Strengths</h3>
+              </div>
+              {strengths?.length > 0 ? (
+                <ul className="space-y-3 relative z-10">
+                  {strengths.map((s, i) => (
+                    <li key={i} className="text-sm text-white/70 leading-relaxed flex items-start gap-3">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 mt-2 shrink-0 shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
+                      {s}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm text-white/30 italic">No data available</p>
               )}
+            </motion.div>
 
-              <div className="grid grid-cols-3 gap-3">
-                <div className="rounded-xl bg-white/3 border border-white/5 p-3 text-center">
-                  <span className="text-lg font-bold text-white">{overallScore}</span>
-                  <p className="text-[10px] text-white/35 mt-0.5">Overall</p>
+            <motion.div variants={itemVariants} className="rounded-3xl border border-red-500/10 bg-red-500/[0.02] p-6 shadow-xl relative overflow-hidden group hover:bg-red-500/[0.04] transition-colors">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-red-500/10 blur-[50px] rounded-full translate-x-1/2 -translate-y-1/2" />
+              <div className="flex items-center gap-3 mb-5 relative z-10">
+                <div className="p-2 rounded-xl bg-red-500/20 text-red-400">
+                   <FiAlertTriangle size={16} />
                 </div>
-                <div className="rounded-xl bg-white/3 border border-white/5 p-3 text-center">
-                  <span className="text-lg font-bold text-white">{avgQuestionScore}</span>
-                  <p className="text-[10px] text-white/35 mt-0.5">Avg / Question</p>
-                </div>
-                <div className="rounded-xl bg-white/3 border border-white/5 p-3 text-center">
-                  <span className="text-lg font-bold text-white">{questions.length}</span>
-                  <p className="text-[10px] text-white/35 mt-0.5">Questions</p>
-                </div>
+                <h3 className="text-sm font-bold text-red-400 uppercase tracking-widest">Areas to Improve</h3>
               </div>
-            </div>
-          </div>
-        </motion.div>
+              {weaknesses?.length > 0 ? (
+                <ul className="space-y-3 relative z-10">
+                  {weaknesses.map((w, i) => (
+                    <li key={i} className="text-sm text-white/70 leading-relaxed flex items-start gap-3">
+                      <span className="w-1.5 h-1.5 rounded-full bg-red-400 mt-2 shrink-0 shadow-[0_0_8px_rgba(248,113,113,0.8)]" />
+                      {w}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm text-white/30 italic">No data available</p>
+              )}
+            </motion.div>
 
-        {/* Metrics Breakdown */}
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="rounded-2xl border border-white/8 bg-[#111113] p-6 sm:p-8 mb-6"
-        >
-          <div className="flex items-center gap-2 mb-5">
-            <FiTarget size={16} className="text-white/40" />
-            <span className="text-sm font-semibold text-white/70">Skill Metrics</span>
-          </div>
-          <div className="space-y-3">
-            {aggregatedMetrics.map((m) => (
-              <MetricBar key={m.key} label={m.label} value={m.value} />
-            ))}
-          </div>
-        </motion.div>
-
-        {/* Strengths / Weaknesses / Recommendations */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-          {/* Strengths */}
-          <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-            className="rounded-2xl border border-white/8 bg-[#111113] p-5"
-          >
-            <div className="flex items-center gap-2 mb-4">
-              <FiCheckCircle size={14} className="text-emerald-400" />
-              <span className="text-xs font-semibold text-emerald-400 uppercase tracking-wider">Strengths</span>
-            </div>
-            {report?.strengths?.length > 0 ? (
-              <ul className="space-y-2">
-                {report.strengths.map((s, i) => (
-                  <li key={i} className="text-xs text-white/60 leading-relaxed flex items-start gap-2">
-                    <span className="w-1 h-1 rounded-full bg-emerald-400 mt-1.5 shrink-0" />
-                    {s}
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-xs text-white/25">No data available</p>
-            )}
-          </motion.div>
-
-          {/* Weaknesses */}
-          <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.35 }}
-            className="rounded-2xl border border-white/8 bg-[#111113] p-5"
-          >
-            <div className="flex items-center gap-2 mb-4">
-              <FiAlertTriangle size={14} className="text-red-400" />
-              <span className="text-xs font-semibold text-red-400 uppercase tracking-wider">Weaknesses</span>
-            </div>
-            {report?.weaknesses?.length > 0 ? (
-              <ul className="space-y-2">
-                {report.weaknesses.map((w, i) => (
-                  <li key={i} className="text-xs text-white/60 leading-relaxed flex items-start gap-2">
-                    <span className="w-1 h-1 rounded-full bg-red-400 mt-1.5 shrink-0" />
-                    {w}
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-xs text-white/25">No data available</p>
-            )}
-          </motion.div>
-
-          {/* Recommendations */}
-          <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4 }}
-            className="rounded-2xl border border-white/8 bg-[#111113] p-5"
-          >
-            <div className="flex items-center gap-2 mb-4">
-              <FiTrendingUp size={14} className="text-blue-400" />
-              <span className="text-xs font-semibold text-blue-400 uppercase tracking-wider">Recommendations</span>
-            </div>
-            {report?.recommendations?.length > 0 ? (
-              <ul className="space-y-2">
-                {report.recommendations.map((r, i) => (
-                  <li key={i} className="text-xs text-white/60 leading-relaxed flex items-start gap-2">
-                    <span className="w-1 h-1 rounded-full bg-blue-400 mt-1.5 shrink-0" />
-                    {r}
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-xs text-white/25">No data available</p>
-            )}
-          </motion.div>
-        </div>
-
-        {/* Per-Question Breakdown */}
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.45 }}
-          className="mb-8"
-        >
-          <div className="flex items-center gap-2 mb-4">
-            <FiMessageSquare size={16} className="text-white/40" />
-            <span className="text-sm font-semibold text-white/70">Question Breakdown</span>
+            <motion.div variants={itemVariants} className="rounded-3xl border border-blue-500/10 bg-blue-500/[0.02] p-6 shadow-xl relative overflow-hidden group hover:bg-blue-500/[0.04] transition-colors">
+               <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 blur-[50px] rounded-full translate-x-1/2 -translate-y-1/2" />
+              <div className="flex items-center gap-3 mb-5 relative z-10">
+                <div className="p-2 rounded-xl bg-blue-500/20 text-blue-400">
+                   <FiTrendingUp size={16} />
+                </div>
+                <h3 className="text-sm font-bold text-blue-400 uppercase tracking-widest">Action Plan</h3>
+              </div>
+              {recommendations?.length > 0 ? (
+                <ul className="space-y-3 relative z-10">
+                  {recommendations.map((r, i) => (
+                    <li key={i} className="text-sm text-white/70 leading-relaxed flex items-start gap-3">
+                      <span className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-2 shrink-0 shadow-[0_0_8px_rgba(96,165,250,0.8)]" />
+                      {r}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm text-white/30 italic">No data available</p>
+              )}
+            </motion.div>
           </div>
 
-          <div className="space-y-4">
-            {questions.map((q, idx) => {
-              const dc = DIFFICULTY_COLORS[q.difficulty] || DIFFICULTY_COLORS.easy;
-              const fb = q.feedback || {};
+          {/* Per-Question Breakdown */}
+          <motion.div variants={itemVariants} className="mt-10">
+            <div className="flex items-center gap-3 mb-6">
+               <div className="p-2 rounded-xl bg-white/5 border border-white/10 text-white/60">
+                 <FiMessageSquare size={18} />
+               </div>
+               <h2 className="text-xl font-bold text-white/90 tracking-tight">Detailed Breakdown</h2>
+            </div>
 
-              return (
-                <motion.div
-                  key={idx}
-                  initial={{ opacity: 0, x: -8 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.5 + idx * 0.08 }}
-                  className="rounded-2xl border border-white/8 bg-[#111113] overflow-hidden"
-                >
-                  {/* Question Header */}
-                  <div className="px-5 py-4 border-b border-white/5 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <span className="w-7 h-7 rounded-lg bg-white/5 flex items-center justify-center text-xs font-bold text-white/50">
-                        {idx + 1}
-                      </span>
-                      <span className={`px-2 py-0.5 rounded-md text-[10px] font-semibold uppercase ${dc.bg} ${dc.text} ${dc.border} border`}>
-                        {q.difficulty}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <FiZap size={12} className="text-white/30" />
-                      <span className="text-sm font-bold text-white">{fb.score || 0}</span>
-                      <span className="text-[10px] text-white/30">/100</span>
-                    </div>
-                  </div>
+            <div className="space-y-4">
+              {questions.map((q, idx) => {
+                const dc = DIFFICULTY_COLORS[q.difficulty] || DIFFICULTY_COLORS.easy;
+                const fb = q.feedback || {};
+                const isExpanded = expandedQuestion === idx;
 
-                  <div className="px-5 py-4 space-y-4">
-                    {/* Question */}
-                    <div>
-                      <span className="text-[10px] text-white/25 uppercase tracking-wider block mb-1">Question</span>
-                      <p className="text-sm text-white/80 leading-relaxed">{q.question}</p>
-                    </div>
-
-                    {/* User Answer */}
-                    <div>
-                      <span className="text-[10px] text-white/25 uppercase tracking-wider block mb-1">Your Answer</span>
-                      <p className="text-sm text-white/50 leading-relaxed bg-white/2 rounded-lg p-3 border border-white/5">
-                        {q.userAnswer || <span className="italic text-white/20">No answer provided</span>}
-                      </p>
-                    </div>
-
-                    {/* AI Feedback */}
-                    {fb.feedback && (
-                      <div>
-                        <span className="text-[10px] text-emerald-400/60 uppercase tracking-wider block mb-1">AI Feedback</span>
-                        <p className="text-sm text-white/60 leading-relaxed bg-emerald-500/5 rounded-lg p-3 border border-emerald-500/10">
-                          {fb.feedback}
-                        </p>
+                return (
+                  <motion.div
+                    key={idx}
+                    layout
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.1 * idx, duration: 0.4 }}
+                    className="rounded-3xl border border-white/10 bg-[#111113]/60 backdrop-blur-md overflow-hidden hover:border-white/20 transition-colors shadow-lg"
+                  >
+                    {/* Question Header - Clickable */}
+                    <div 
+                       onClick={() => setExpandedQuestion(isExpanded ? null : idx)}
+                       className="px-6 py-5 cursor-pointer flex items-center justify-between bg-white/[0.02] hover:bg-white/[0.04] transition-colors"
+                    >
+                      <div className="flex items-center gap-4 flex-1 pr-4">
+                        <div className="w-10 h-10 rounded-2xl bg-white/5 flex items-center justify-center text-sm font-bold text-white/70 border border-white/10 shrink-0 shadow-inner">
+                          {idx + 1}
+                        </div>
+                        <div className="flex flex-col gap-1.5 max-w-full">
+                           <div className="flex items-center gap-2">
+                             <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase ${dc.bg} ${dc.text} ${dc.border} border tracking-wider`}>
+                               {q.difficulty}
+                             </span>
+                           </div>
+                           <p className="text-sm font-medium text-white/90 line-clamp-1">{q.question}</p>
+                        </div>
                       </div>
-                    )}
-
-                    {/* Improvements */}
-                    {fb.improvements && fb.improvements.length > 0 && (
-                      <div>
-                        <span className="text-[10px] text-amber-400/60 uppercase tracking-wider block mb-2">Suggested Improvements</span>
-                        <TagList items={fb.improvements} icon={FiTrendingUp} color="blue" />
+                      
+                      <div className="flex items-center gap-6 shrink-0">
+                         <div className="flex flex-col items-end">
+                            <span className="text-[10px] text-white/40 uppercase tracking-widest mb-0.5">Score</span>
+                            <div className="flex items-baseline gap-1">
+                               <FiZap size={14} className={fb.score >= 70 ? "text-emerald-400" : fb.score >= 40 ? "text-amber-400" : "text-red-400"} />
+                               <span className="text-lg font-bold text-white">{fb.score || 0}</span>
+                            </div>
+                         </div>
+                         <motion.div
+                            animate={{ rotate: isExpanded ? 180 : 0 }}
+                            transition={{ duration: 0.3 }}
+                            className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-white/40 border border-white/5"
+                         >
+                            <FiChevronDown size={16} />
+                         </motion.div>
                       </div>
-                    )}
-                  </div>
-                </motion.div>
-              );
-            })}
-          </div>
-        </motion.div>
+                    </div>
 
-        {/* Bottom Actions */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.8 }}
-          className="flex items-center justify-between pt-4 border-t border-white/5 print:hidden"
-        >
-          <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={() => navigate("/interview")}
-            className="px-5 py-2.5 rounded-xl bg-white/5 border border-white/10 text-xs text-white/60 hover:text-white transition-colors"
+                    <AnimatePresence>
+                      {isExpanded && (
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: "auto", opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          transition={{ duration: 0.3, ease: "easeInOut" }}
+                          className="border-t border-white/5"
+                        >
+                          <div className="px-6 py-6 space-y-6">
+                            {/* Full Question */}
+                            <div>
+                              <span className="text-[10px] text-white/30 uppercase tracking-widest font-semibold block mb-2">Question</span>
+                              <p className="text-base text-white/90 leading-relaxed font-medium">{q.question}</p>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                              {/* User Answer */}
+                              <div>
+                                <span className="text-[10px] text-white/30 uppercase tracking-widest font-semibold block mb-2">Your Answer</span>
+                                <div className="bg-white/5 rounded-2xl p-5 border border-white/10 h-full">
+                                  <p className="text-sm text-white/70 leading-relaxed whitespace-pre-wrap">
+                                    {q.userAnswer || <span className="italic text-white/30">No answer provided</span>}
+                                  </p>
+                                </div>
+                              </div>
+
+                              {/* AI Feedback */}
+                              {fb.feedback && (
+                                <div className="flex flex-col h-full">
+                                  <span className="text-[10px] text-emerald-400/70 uppercase tracking-widest font-semibold block mb-2">Expert Feedback</span>
+                                  <div className="bg-emerald-500/5 rounded-2xl p-5 border border-emerald-500/10 flex-1 relative overflow-hidden">
+                                     <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/10 blur-[30px] rounded-full translate-x-1/2 -translate-y-1/2 pointer-events-none" />
+                                    <p className="text-sm text-emerald-100/80 leading-relaxed whitespace-pre-wrap relative z-10">
+                                      {fb.feedback}
+                                    </p>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Improvements */}
+                            {fb.improvements && fb.improvements.length > 0 && (
+                              <div className="pt-2">
+                                <span className="text-[10px] text-blue-400/70 uppercase tracking-widest font-semibold block mb-3">Key Improvements</span>
+                                <TagList items={fb.improvements} icon={FiTrendingUp} color="blue" />
+                              </div>
+                            )}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </motion.div>
+                );
+              })}
+            </div>
+          </motion.div>
+
+          {/* Bottom Actions */}
+          <motion.div
+            variants={itemVariants}
+            className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-10 border-t border-white/10 print:hidden"
           >
-            New Interview
-          </motion.button>
-          <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={() => navigate("/dashboard")}
-            className="px-5 py-2.5 rounded-xl bg-white text-black text-xs font-semibold"
-          >
-            Back to Dashboard
-          </motion.button>
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => navigate("/interview")}
+              className="w-full sm:w-auto px-8 py-3.5 rounded-2xl bg-white/5 border border-white/10 text-sm font-semibold text-white/80 hover:text-white hover:bg-white/10 transition-all shadow-lg backdrop-blur-sm"
+            >
+              Start New Interview
+            </motion.button>
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => navigate("/dashboard")}
+              className="w-full sm:w-auto px-8 py-3.5 rounded-2xl bg-gradient-to-r from-emerald-400 to-emerald-500 text-black text-sm font-bold shadow-[0_0_20px_rgba(52,211,153,0.3)] hover:shadow-[0_0_30px_rgba(52,211,153,0.5)] transition-shadow"
+            >
+              Return to Dashboard
+            </motion.button>
+          </motion.div>
         </motion.div>
       </div>
     </div>

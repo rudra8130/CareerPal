@@ -16,26 +16,27 @@ let app = express()
 app.use(express.json())
 
 app.use(cors({
-  origin:"http://localhost:5173",
-  credentials:true
+  origin: "http://localhost:5173",
+  credentials: true
 }))
 
 app.use(morgan("dev"))
 
 app.use(cookieParser())
 
-app.get("/", (req,res)=>{
+app.get("/", (req, res) => {
   res.send("hello rudra")
 })
 
 app.use("/api/auth", proxy(process.env.AUTH_URL))
 
-app.use("/api/resume",isAuth, proxyWithHeaders(process.env.RESUME_URL))
+app.use("/api/resume", isAuth, proxyWithHeaders(process.env.RESUME_URL))
 
-app.use("/api/interview",isAuth, proxyWithHeaders(process.env.INTERVIEW_URL))
-app.get("/api/me" , isAuth, getCurrentUser)
+app.use("/api/interview", isAuth, proxyWithHeaders(process.env.INTERVIEW_URL))
+app.use("/api/roadmap", isAuth, proxyWithHeaders(process.env.ROADMAP_URL))
+app.get("/api/me", isAuth, getCurrentUser)
 
 
-app.listen(PORT, ()=>{
+app.listen(PORT, () => {
   console.log(`Server started on port ${PORT}`)
 })

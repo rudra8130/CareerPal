@@ -30,6 +30,16 @@ CareerPal is built on a scalable **Microservices Architecture** to ensure high a
 - **Authentication**: Firebase Admin SDK
 - **Containerization**: Docker & Docker Compose (for microservices)
 
+## 📸 Screenshots
+
+<img width="1912" height="912" alt="image" src="https://github.com/user-attachments/assets/d9ff8d83-6c88-4b51-a8b5-728b4e06f959" />
+<img width="1917" height="912" alt="image" src="https://github.com/user-attachments/assets/f20ac2aa-d62a-4659-bc9c-b844696c16c5" />
+<img width="1917" height="881" alt="image" src="https://github.com/user-attachments/assets/ce5f2f4d-2750-4962-8426-b44b088165e3" />
+<img width="1915" height="901" alt="image" src="https://github.com/user-attachments/assets/fd2a307e-46de-49e7-907d-db6deb540dde" />
+<img width="1916" height="897" alt="image" src="https://github.com/user-attachments/assets/ba0b8e3f-a2dd-4fa0-84ea-5cf3caee3067" />
+<img width="1910" height="916" alt="image" src="https://github.com/user-attachments/assets/aabbd4ba-72ab-40b0-b4c0-2470e3b50cf3" />
+
+
 ## 🚀 Getting Started
 
 ### Prerequisites

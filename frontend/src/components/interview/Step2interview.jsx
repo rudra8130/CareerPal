@@ -42,6 +42,7 @@ function Step2interview({ interviewData, user, onSubmitAnswer }) {
     interviewData.currentQuestion || 0,
   );
   const [answer, setAnswer] = useState("");
+  const [interimAnswer, setInterimAnswer] = useState("");
   const [feedback, setFeedback] = useState(null);
   const [loading, setLoading] = useState(false);
   const [finished, setFinished] = useState(false);
@@ -68,6 +69,18 @@ function Step2interview({ interviewData, user, onSubmitAnswer }) {
   const userVideoRef = useRef(null);
   const recognitionRef = useRef(null);
   const streamRef = useRef(null);
+  const textareaRef = useRef(null);
+
+  const micOnRef = useRef(micOn);
+  const isAIPlayingRef = useRef(isAIPlaying);
+
+  useEffect(() => {
+    micOnRef.current = micOn;
+  }, [micOn]);
+
+  useEffect(() => {
+    isAIPlayingRef.current = isAIPlaying;
+  }, [isAIPlaying]);
 
   const totalTime = question?.timer || 60;
   const progress = ((currentIndex + 1) / totalQuestions) * 100;
@@ -96,17 +109,76 @@ function Step2interview({ interviewData, user, onSubmitAnswer }) {
   // Speech recognition (mic -> answer textarea)
   // ---------------------------------------------------------------------
   useEffect(() => {
-    if (!("webkitSpeechRecognition" in window)) return;
-    const rec = new window.webkitSpeechRecognition();
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) return;
+
+    const rec = new SpeechRecognition();
     rec.lang = "en-US";
     rec.continuous = true;
-    rec.interimResults = false;
+    rec.interimResults = true;
+    
     rec.onresult = (e) => {
-      const t = e.results[e.results.length - 1][0].transcript;
-      setAnswer((prev) => (prev ? prev + " " + t : t));
+      let finalChunk = '';
+      let interimChunk = '';
+      
+      for (let i = e.resultIndex; i < e.results.length; ++i) {
+        if (e.results[i].isFinal) {
+          finalChunk += e.results[i][0].transcript;
+        } else {
+          interimChunk += e.results[i][0].transcript;
+        }
+      }
+      
+      if (finalChunk) {
+        setAnswer((prev) => {
+          const newAns = [prev.trim(), finalChunk.trim()].filter(Boolean).join(" ");
+          return newAns + " "; // Add trailing space for next speech
+        });
+      }
+      setInterimAnswer(interimChunk);
+      
+      // Auto-scroll textarea to bottom
+      if (textareaRef.current) {
+        textareaRef.current.scrollTop = textareaRef.current.scrollHeight;
+      }
     };
-    rec.onerror = () => { };
+    
+    rec.onerror = (e) => {
+      console.error("Speech recognition error:", e.error);
+      if (e.error === "not-allowed" || e.error === "audio-capture" || e.error === "network") {
+        micOnRef.current = false; // Mutate ref immediately to break onend race conditions
+        setMicOn(false); // Force mic off in UI
+        if (e.error === "network") {
+          console.warn("Speech recognition network error: This usually happens if you are offline, or if you are using a browser like Brave/Chromium that blocks Google's speech API. Try using Google Chrome or Edge.");
+        }
+      }
+    };
+    
+    rec.onend = () => {
+      setInterimAnswer(""); // Clear interim on end
+      // Only restart if mic is supposed to be on AND AI is not playing
+      if (micOnRef.current && !isAIPlayingRef.current) {
+        // Small delay to prevent tight infinite loops
+        setTimeout(() => {
+          if (micOnRef.current && !isAIPlayingRef.current) {
+            try {
+              rec.start();
+            } catch (_) {}
+          }
+        }, 300);
+      }
+    };
+    
     recognitionRef.current = rec;
+
+    // Start immediately if it should be on
+    if (micOnRef.current && !isAIPlayingRef.current) {
+      try {
+        rec.start();
+      } catch (err) {
+        console.error("Failed to start speech recognition initially", err);
+      }
+    }
 
     return () => {
       try {
@@ -363,6 +435,10 @@ function Step2interview({ interviewData, user, onSubmitAnswer }) {
   // ---------------------------------------------------------------------
   const handleSubmit = async (auto = false) => {
     if (loading || finished) return;
+    
+    // Capture the absolute latest text, including anything still unfinalized from the mic
+    const finalAnswerToSubmit = (answer + (interimAnswer ? " " + interimAnswer : "")).trim();
+    
     setTimerActive(false);
     setLoading(true);
     stopMic();
@@ -373,7 +449,7 @@ function Step2interview({ interviewData, user, onSubmitAnswer }) {
       if (onSubmitAnswer) {
         result = await onSubmitAnswer({
           question,
-          answer,
+          answer: finalAnswerToSubmit,
           index: currentIndex,
           auto,
         });
@@ -600,8 +676,12 @@ function Step2interview({ interviewData, user, onSubmitAnswer }) {
                   Your Answer
                 </span>
                 <textarea
-                  value={answer}
-                  onChange={(e) => setAnswer(e.target.value)}
+                  ref={textareaRef}
+                  value={[answer.trim(), interimAnswer.trim()].filter(Boolean).join(" ")}
+                  onChange={(e) => {
+                    setAnswer(e.target.value);
+                    setInterimAnswer("");
+                  }}
                   onKeyDown={handleKeyDown}
                   placeholder="Write your answer here... or speak if mic is on"
                   className="flex-1 min-h-[160px] w-full rounded-2xl border border-white/5 bg-[#161618] p-4 text-sm text-white placeholder-white/25 outline-none focus:border-white/20 resize-none transition-colors"
